@@ -1,13 +1,72 @@
 import json
 import os
+import time
+import base64
+import hashlib
+import hmac
 import urllib.request
 import urllib.parse
 from typing import Any
 
 
+def create_jwt(service_account_json: dict, scope: str) -> str:
+    """Создает JWT токен для Google OAuth2"""
+    now = int(time.time())
+    
+    header = {
+        "alg": "RS256",
+        "typ": "JWT"
+    }
+    
+    claim = {
+        "iss": service_account_json["client_email"],
+        "scope": scope,
+        "aud": "https://oauth2.googleapis.com/token",
+        "exp": now + 3600,
+        "iat": now
+    }
+    
+    header_b64 = base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip('=')
+    claim_b64 = base64.urlsafe_b64encode(json.dumps(claim).encode()).decode().rstrip('=')
+    
+    message = f"{header_b64}.{claim_b64}"
+    
+    from Crypto.PublicKey import RSA
+    from Crypto.Signature import pkcs1_15
+    from Crypto.Hash import SHA256
+    
+    key = RSA.import_key(service_account_json["private_key"])
+    h = SHA256.new(message.encode())
+    signature = pkcs1_15.new(key).sign(h)
+    signature_b64 = base64.urlsafe_b64encode(signature).decode().rstrip('=')
+    
+    return f"{message}.{signature_b64}"
+
+
+def get_access_token(service_account_json: dict) -> str:
+    """Получает access token через JWT"""
+    scope = "https://www.googleapis.com/auth/spreadsheets"
+    jwt_token = create_jwt(service_account_json, scope)
+    
+    data = urllib.parse.urlencode({
+        'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        'assertion': jwt_token
+    }).encode()
+    
+    req = urllib.request.Request(
+        'https://oauth2.googleapis.com/token',
+        data=data,
+        headers={'Content-Type': 'application/x-www-form-urlencoded'}
+    )
+    
+    with urllib.request.urlopen(req) as response:
+        result = json.loads(response.read().decode())
+        return result['access_token']
+
+
 def handler(event: dict, context: Any) -> dict:
     """
-    Добавляет сгенерированную ссылку в Google Таблицу.
+    Добавляет сгенерированную ссылку в Google Таблицу через Service Account.
     Принимает URL ссылки и статус, добавляет новую строку в таблицу.
     """
     method = event.get('httpMethod', 'GET')
@@ -36,11 +95,11 @@ def handler(event: dict, context: Any) -> dict:
             'isBase64Encoded': False
         }
     
-    api_key = os.environ.get('GOOGLE_API_KEY')
+    service_account_json_str = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
     spreadsheet_id = os.environ.get('GOOGLE_SPREADSHEET_ID')
     sheet_name = os.environ.get('GOOGLE_SHEET_NAME', 'Links')
     
-    if not api_key or not spreadsheet_id:
+    if not service_account_json_str or not spreadsheet_id:
         return {
             'statusCode': 500,
             'headers': {
@@ -48,8 +107,8 @@ def handler(event: dict, context: Any) -> dict:
                 'Access-Control-Allow-Origin': '*'
             },
             'body': json.dumps({
-                'error': 'Google API credentials not configured',
-                'details': 'Please set GOOGLE_API_KEY and GOOGLE_SPREADSHEET_ID'
+                'error': 'Google Service Account not configured',
+                'details': 'Please set GOOGLE_SERVICE_ACCOUNT_JSON and GOOGLE_SPREADSHEET_ID'
             }),
             'isBase64Encoded': False
         }
@@ -70,23 +129,23 @@ def handler(event: dict, context: Any) -> dict:
                 'isBase64Encoded': False
             }
         
-        range_notation = f'{sheet_name}!A:B'
-        url = f'https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{urllib.parse.quote(range_notation)}:append'
+        service_account_json = json.loads(service_account_json_str)
+        access_token = get_access_token(service_account_json)
         
-        params = {
-            'valueInputOption': 'RAW',
-            'key': api_key
-        }
-        url_with_params = f'{url}?{urllib.parse.urlencode(params)}'
+        range_notation = f'{sheet_name}!A:B'
+        url = f'https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{urllib.parse.quote(range_notation)}:append?valueInputOption=RAW'
         
         data = {
             'values': [[link, status]]
         }
         
         req = urllib.request.Request(
-            url_with_params,
+            url,
             data=json.dumps(data).encode('utf-8'),
-            headers={'Content-Type': 'application/json'},
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {access_token}'
+            },
             method='POST'
         )
         
@@ -117,7 +176,8 @@ def handler(event: dict, context: Any) -> dict:
             },
             'body': json.dumps({
                 'error': 'Google Sheets API error',
-                'details': error_body
+                'details': error_body,
+                'status_code': e.code
             }),
             'isBase64Encoded': False
         }
