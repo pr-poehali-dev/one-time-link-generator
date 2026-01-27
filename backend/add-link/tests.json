@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Add link to Google Sheet",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "link": "https://example.com/page?token=test-uuid-123",
+        "status": "new"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "message": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Missing link parameter",
+      "method": "POST",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "Link is required"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

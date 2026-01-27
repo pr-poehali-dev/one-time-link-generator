@@ -167,7 +167,7 @@ const Index = () => {
     });
   };
 
-  const generateLink = (template: Template) => {
+  const generateLink = async (template: Template) => {
     const uuid = generateUUID();
     const fullUrl = `${template.baseUrl}${uuid}`;
 
@@ -187,10 +187,35 @@ const Index = () => {
     };
 
     setLinks([newLink, ...links]);
-    toast({
-      title: 'Ссылка сгенерирована',
-      description: 'Ссылка добавлена в Google Таблицу',
-    });
+
+    try {
+      const response = await fetch('https://functions.poehali.dev/6b468f62-f7bb-416d-9a74-f2009d153da5', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          link: fullUrl,
+          status: 'new',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add link to Google Sheet');
+      }
+
+      toast({
+        title: 'Ссылка сгенерирована',
+        description: 'Ссылка добавлена в Google Таблицу',
+      });
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось добавить ссылку в Google Таблицу',
+        variant: 'destructive',
+      });
+      console.error('Error adding link to Google Sheet:', error);
+    }
   };
 
   const copyToClipboard = (text: string, type = 'Ссылка') => {
