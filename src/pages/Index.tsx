@@ -20,6 +20,7 @@ interface Template {
   name: string;
   baseUrl: string;
   createdAt: string;
+  script?: string;
 }
 
 interface GeneratedLink {
@@ -54,7 +55,15 @@ const Index = () => {
   ]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isScriptDialogOpen, setIsScriptDialogOpen] = useState(false);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [newTemplate, setNewTemplate] = useState({ name: '', baseUrl: '' });
+  const [googleSettings, setGoogleSettings] = useState({
+    apiKey: '',
+    spreadsheetId: '',
+    sheetName: 'Links',
+  });
 
   const generateUUID = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -62,6 +71,67 @@ const Index = () => {
         v = c === 'x' ? r : (r & 0x3) | 0x8;
       return v.toString(16);
     });
+  };
+
+  const generateScript = (template: Template) => {
+    const { apiKey, spreadsheetId, sheetName } = googleSettings;
+    return `<script>
+(function() {
+  const API_KEY = '${apiKey}';
+  const SPREADSHEET_ID = '${spreadsheetId}';
+  const SHEET_NAME = '${sheetName}';
+  
+  function getTokenFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('token');
+  }
+  
+  async function checkTokenInSheet(token) {
+    const url = \`https://sheets.googleapis.com/v4/spreadsheets/\${SPREADSHEET_ID}/values/\${SHEET_NAME}?key=\${API_KEY}\`;
+    
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (!data.values) return false;
+      
+      for (let row of data.values) {
+        if (row[0] && row[0].includes(token) && row[1] === 'new') {
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Ошибка проверки токена:', error);
+      return false;
+    }
+  }
+  
+  async function init() {
+    const token = getTokenFromUrl();
+    const formBlock = document.querySelector('.formreg');
+    
+    if (!formBlock) {
+      console.warn('Блок .formreg не найден');
+      return;
+    }
+    
+    if (!token) {
+      formBlock.style.display = 'none';
+      return;
+    }
+    
+    const isValid = await checkTokenInSheet(token);
+    formBlock.style.display = isValid ? 'block' : 'none';
+  }
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>`;
   };
 
   const createTemplate = () => {
@@ -85,6 +155,7 @@ const Index = () => {
         hour: '2-digit',
         minute: '2-digit',
       }),
+      script: generateScript({ id: '', name: newTemplate.name, baseUrl: newTemplate.baseUrl, createdAt: '' }),
     };
 
     setTemplates([template, ...templates]);
@@ -92,7 +163,7 @@ const Index = () => {
     setIsDialogOpen(false);
     toast({
       title: 'Шаблон создан',
-      description: `Шаблон "${template.name}" успешно сохранён`,
+      description: `Шаблон "${template.name}" успешно сохранён и скрипт сгенерирован`,
     });
   };
 
@@ -122,11 +193,39 @@ const Index = () => {
     });
   };
 
-  const copyToClipboard = (url: string) => {
-    navigator.clipboard.writeText(url);
+  const copyToClipboard = (text: string, type = 'Ссылка') => {
+    navigator.clipboard.writeText(text);
     toast({
       title: 'Скопировано',
-      description: 'Ссылка скопирована в буфер обмена',
+      description: `${type} скопирован${type === 'Скрипт' ? '' : 'а'} в буфер обмена`,
+    });
+  };
+
+  const openScriptDialog = (template: Template) => {
+    setSelectedTemplate(template);
+    setIsScriptDialogOpen(true);
+  };
+
+  const saveGoogleSettings = () => {
+    if (!googleSettings.apiKey || !googleSettings.spreadsheetId) {
+      toast({
+        title: 'Ошибка',
+        description: 'Заполните обязательные поля',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    const updatedTemplates = templates.map(template => ({
+      ...template,
+      script: generateScript(template),
+    }));
+    setTemplates(updatedTemplates);
+    
+    setIsSettingsDialogOpen(false);
+    toast({
+      title: 'Настройки сохранены',
+      description: 'Скрипты для всех шаблонов обновлены',
     });
   };
 
@@ -140,8 +239,19 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
       <div className="container mx-auto px-4 py-12 max-w-7xl">
         <header className="text-center mb-12 animate-fade-in">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-500 mb-4 shadow-lg">
-            <Icon name="Link2" size={32} className="text-white" />
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-500 shadow-lg">
+              <Icon name="Link2" size={32} className="text-white" />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsSettingsDialogOpen(true)}
+              className="ml-auto"
+            >
+              <Icon name="Settings" size={18} className="mr-2" />
+              Настройки Google
+            </Button>
           </div>
           <h1 className="text-5xl font-bold text-slate-900 mb-3">Генератор ссылок</h1>
           <p className="text-slate-600 text-lg max-w-2xl mx-auto">
@@ -262,14 +372,24 @@ const Index = () => {
                         </p>
                         <p className="text-xs text-slate-400 mt-1">{template.createdAt}</p>
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => generateLink(template)}
-                        className="shrink-0 ml-3 bg-blue-500 hover:bg-blue-600"
-                      >
-                        <Icon name="Sparkles" size={16} className="mr-1" />
-                        Генерировать
-                      </Button>
+                      <div className="flex gap-2 shrink-0 ml-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openScriptDialog(template)}
+                        >
+                          <Icon name="Code" size={16} className="mr-1" />
+                          Скрипт
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => generateLink(template)}
+                          className="bg-blue-500 hover:bg-blue-600"
+                        >
+                          <Icon name="Sparkles" size={16} className="mr-1" />
+                          Генерировать
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -352,6 +472,151 @@ const Index = () => {
           </div>
         </Card>
       </div>
+
+      <Dialog open={isScriptDialogOpen} onOpenChange={setIsScriptDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Скрипт для валидации токенов</DialogTitle>
+            <DialogDescription>
+              Скопируйте этот скрипт и вставьте его на страницу{' '}
+              {selectedTemplate?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-slate-900 p-4 rounded-lg overflow-x-auto">
+              <pre className="text-sm text-green-400 font-mono">
+                {selectedTemplate?.script || ''}
+              </pre>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={() =>
+                  copyToClipboard(selectedTemplate?.script || '', 'Скрипт')
+                }
+                className="flex-1 bg-blue-500 hover:bg-blue-600"
+              >
+                <Icon name="Copy" size={18} className="mr-2" />
+                Копировать скрипт
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsScriptDialogOpen(false)}
+              >
+                Закрыть
+              </Button>
+            </div>
+            <Card className="p-4 bg-amber-50 border-amber-200">
+              <div className="flex gap-3">
+                <Icon name="Info" size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-900">
+                  <p className="font-semibold mb-2">Как использовать:</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Скопируйте скрипт выше</li>
+                    <li>Вставьте его в HTML-код вашей страницы перед закрывающим тегом {'</body>'}</li>
+                    <li>Убедитесь, что на странице есть блок с классом <code className="bg-amber-100 px-1 rounded">.formreg</code></li>
+                    <li>Скрипт автоматически проверит токен из URL и покажет/скроет форму</li>
+                  </ol>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Настройки Google Таблиц</DialogTitle>
+            <DialogDescription>
+              Укажите данные для подключения к Google Sheets API
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="apiKey">API Key *</Label>
+              <Input
+                id="apiKey"
+                placeholder="AIzaSyD..."
+                value={googleSettings.apiKey}
+                onChange={(e) =>
+                  setGoogleSettings({ ...googleSettings, apiKey: e.target.value })
+                }
+              />
+              <p className="text-xs text-slate-500">
+                Получите ключ в{' '}
+                <a
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  Google Cloud Console
+                </a>
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="spreadsheetId">ID таблицы *</Label>
+              <Input
+                id="spreadsheetId"
+                placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                value={googleSettings.spreadsheetId}
+                onChange={(e) =>
+                  setGoogleSettings({ ...googleSettings, spreadsheetId: e.target.value })
+                }
+              />
+              <p className="text-xs text-slate-500">
+                Скопируйте ID из URL таблицы: docs.google.com/spreadsheets/d/<strong>ID</strong>/edit
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="sheetName">Название листа</Label>
+              <Input
+                id="sheetName"
+                placeholder="Links"
+                value={googleSettings.sheetName}
+                onChange={(e) =>
+                  setGoogleSettings({ ...googleSettings, sheetName: e.target.value })
+                }
+              />
+              <p className="text-xs text-slate-500">
+                Имя листа в таблице (по умолчанию: Links)
+              </p>
+            </div>
+
+            <Card className="p-4 bg-blue-50 border-blue-200">
+              <div className="flex gap-3">
+                <Icon name="AlertCircle" size={20} className="text-blue-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-blue-900">
+                  <p className="font-semibold mb-2">Структура таблицы:</p>
+                  <p>Таблица должна содержать 2 столбца:</p>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    <li><strong>Столбец A (link)</strong> — полная ссылка с токеном</li>
+                    <li><strong>Столбец B (status)</strong> — статус: "new" или "used"</li>
+                  </ul>
+                </div>
+              </div>
+            </Card>
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                onClick={saveGoogleSettings}
+                className="flex-1 bg-blue-500 hover:bg-blue-600"
+              >
+                <Icon name="Save" size={18} className="mr-2" />
+                Сохранить настройки
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsSettingsDialogOpen(false)}
+              >
+                Отмена
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
