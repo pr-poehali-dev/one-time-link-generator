@@ -145,7 +145,14 @@ def handler(event: dict, context: Any) -> dict:
             if len(row) >= 2:
                 link = row[0]
                 status = row[1]
-                if token in link and status == 'new':
+                
+                link_token = None
+                if '?token=' in link:
+                    link_token = link.split('?token=')[1].split('&')[0]
+                elif '&token=' in link:
+                    link_token = link.split('&token=')[1].split('&')[0]
+                
+                if link_token == token and status == 'new':
                     is_valid = True
                     break
         
