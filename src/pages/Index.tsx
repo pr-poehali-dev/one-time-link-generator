@@ -99,18 +99,27 @@ const Index = () => {
     const token = getTokenFromUrl();
     const formBlock = document.querySelector('.formreg');
     const textBlock = document.querySelector('.textreg');
+    const preloadBlock = document.querySelector('.preload');
     
     console.log('[LinkChecker] Token:', token);
     console.log('[LinkChecker] formBlock найден:', !!formBlock);
     console.log('[LinkChecker] textBlock найден:', !!textBlock);
+    console.log('[LinkChecker] preloadBlock найден:', !!preloadBlock);
+    
+    // Показываем preload, скрываем остальные блоки
+    if (preloadBlock) preloadBlock.style.display = 'block';
+    if (formBlock) formBlock.style.display = 'none';
+    if (textBlock) textBlock.style.display = 'none';
     
     if (!formBlock) {
       console.warn('[LinkChecker] Блок .formreg не найден');
+      if (preloadBlock) preloadBlock.style.display = 'none';
       return;
     }
     
     if (!token) {
       console.log('[LinkChecker] Нет токена - показываем textreg');
+      if (preloadBlock) preloadBlock.style.display = 'none';
       formBlock.style.display = 'none';
       if (textBlock) textBlock.style.display = 'block';
       return;
@@ -119,6 +128,8 @@ const Index = () => {
     const isValid = await checkTokenInSheet(token);
     console.log('[LinkChecker] Токен валиден:', isValid);
     
+    // Скрываем preload и показываем нужный блок
+    if (preloadBlock) preloadBlock.style.display = 'none';
     formBlock.style.display = isValid ? 'block' : 'none';
     if (textBlock) textBlock.style.display = isValid ? 'none' : 'block';
     
