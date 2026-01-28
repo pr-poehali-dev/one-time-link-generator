@@ -95,7 +95,18 @@ def handler(event: dict, context: Any) -> dict:
             'isBase64Encoded': False
         }
     
-    service_account_json_str = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+    service_account_json_str = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON_BASE64')
+    
+    if service_account_json_str:
+        print("[DEBUG] Using BASE64 encoded service account")
+        try:
+            service_account_json_str = base64.b64decode(service_account_json_str).decode('utf-8')
+        except Exception as e:
+            print(f"[ERROR] Failed to decode base64: {e}")
+    else:
+        service_account_json_str = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+        print("[DEBUG] Using plain text service account")
+    
     spreadsheet_id = os.environ.get('GOOGLE_SPREADSHEET_ID')
     sheet_name = os.environ.get('GOOGLE_SHEET_NAME', 'Links')
     
