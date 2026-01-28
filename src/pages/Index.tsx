@@ -74,12 +74,9 @@ const Index = () => {
   };
 
   const generateScript = (template: Template) => {
-    const { apiKey, spreadsheetId, sheetName } = googleSettings;
     return `<script>
 (function() {
-  const API_KEY = '${apiKey}';
-  const SPREADSHEET_ID = '${spreadsheetId}';
-  const SHEET_NAME = '${sheetName}';
+  const CHECK_API = 'https://functions.poehali.dev/70f8b3fa-befa-45a8-9936-79a9bd1c72a6';
   
   function getTokenFromUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -87,22 +84,13 @@ const Index = () => {
   }
   
   async function checkTokenInSheet(token) {
-    const url = \`https://sheets.googleapis.com/v4/spreadsheets/\${SPREADSHEET_ID}/values/\${SHEET_NAME}?key=\${API_KEY}\`;
-    
     try {
-      const response = await fetch(url);
+      const response = await fetch(\`\${CHECK_API}?token=\${encodeURIComponent(token)}\`);
       const data = await response.json();
-      
-      if (!data.values) return false;
-      
-      for (let row of data.values) {
-        if (row[0] && row[0].includes(token) && row[1] === 'new') {
-          return true;
-        }
-      }
-      return false;
+      console.log('[LinkChecker] API response:', data);
+      return data.valid === true;
     } catch (error) {
-      console.error('Ошибка проверки токена:', error);
+      console.error('[LinkChecker] Ошибка проверки токена:', error);
       return false;
     }
   }

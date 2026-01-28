@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "name": "Check valid token",
+      "method": "GET",
+      "path": "/?token=test-token-123",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "valid": "boolean"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Missing token parameter",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
