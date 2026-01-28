@@ -99,6 +99,10 @@ def handler(event: dict, context: Any) -> dict:
     spreadsheet_id = os.environ.get('GOOGLE_SPREADSHEET_ID')
     sheet_name = os.environ.get('GOOGLE_SHEET_NAME', 'Links')
     
+    print(f"[DEBUG] Service Account exists: {bool(service_account_json_str)}")
+    print(f"[DEBUG] Spreadsheet ID: {spreadsheet_id}")
+    print(f"[DEBUG] Sheet name: {sheet_name}")
+    
     if not service_account_json_str or not spreadsheet_id:
         return {
             'statusCode': 500,
@@ -118,6 +122,9 @@ def handler(event: dict, context: Any) -> dict:
         link = body.get('link')
         status = body.get('status', 'new')
         
+        print(f"[DEBUG] Link: {link}")
+        print(f"[DEBUG] Status: {status}")
+        
         if not link:
             return {
                 'statusCode': 400,
@@ -129,11 +136,33 @@ def handler(event: dict, context: Any) -> dict:
                 'isBase64Encoded': False
             }
         
-        service_account_json = json.loads(service_account_json_str)
+        print(f"[DEBUG] Raw service account string (first 200 chars): {service_account_json_str[:200]}")
+        
+        try:
+            service_account_json = json.loads(service_account_json_str)
+        except json.JSONDecodeError as je:
+            print(f"[ERROR] First JSON parse failed: {je}")
+            cleaned = service_account_json_str.strip()
+            
+            if cleaned.startswith('"') and cleaned.endswith('"'):
+                print("[DEBUG] Removing outer quotes...")
+                cleaned = cleaned[1:-1]
+            
+            cleaned = cleaned.replace('\\"', '"')
+            cleaned = cleaned.replace('\\n', '\n')
+            
+            print(f"[DEBUG] Cleaned string (first 200 chars): {cleaned[:200]}")
+            service_account_json = json.loads(cleaned)
+        
+        print(f"[DEBUG] Service account email: {service_account_json.get('client_email')}")
+        
+        print("[DEBUG] Getting access token...")
         access_token = get_access_token(service_account_json)
+        print(f"[DEBUG] Access token received: {access_token[:20]}...")
         
         range_notation = f'{sheet_name}!A:B'
         url = f'https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{urllib.parse.quote(range_notation)}:append?valueInputOption=RAW'
+        print(f"[DEBUG] API URL: {url}")
         
         data = {
             'values': [[link, status]]
@@ -149,8 +178,10 @@ def handler(event: dict, context: Any) -> dict:
             method='POST'
         )
         
+        print("[DEBUG] Sending request to Google Sheets API...")
         with urllib.request.urlopen(req) as response:
             result = json.loads(response.read().decode('utf-8'))
+            print(f"[DEBUG] Success! Response: {result}")
         
         return {
             'statusCode': 200,
@@ -168,6 +199,7 @@ def handler(event: dict, context: Any) -> dict:
         
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8')
+        print(f"[ERROR] HTTP Error {e.code}: {error_body}")
         return {
             'statusCode': e.code,
             'headers': {
@@ -182,6 +214,9 @@ def handler(event: dict, context: Any) -> dict:
             'isBase64Encoded': False
         }
     except Exception as e:
+        print(f"[ERROR] Exception: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
         return {
             'statusCode': 500,
             'headers': {
