@@ -112,20 +112,30 @@ const Index = () => {
     const formBlock = document.querySelector('.formreg');
     const textBlock = document.querySelector('.textreg');
     
+    console.log('[LinkChecker] Token:', token);
+    console.log('[LinkChecker] formBlock найден:', !!formBlock);
+    console.log('[LinkChecker] textBlock найден:', !!textBlock);
+    
     if (!formBlock) {
-      console.warn('Блок .formreg не найден');
+      console.warn('[LinkChecker] Блок .formreg не найден');
       return;
     }
     
     if (!token) {
+      console.log('[LinkChecker] Нет токена - скрываем оба блока');
       formBlock.style.display = 'none';
       if (textBlock) textBlock.style.display = 'none';
       return;
     }
     
     const isValid = await checkTokenInSheet(token);
+    console.log('[LinkChecker] Токен валиден:', isValid);
+    
     formBlock.style.display = isValid ? 'block' : 'none';
     if (textBlock) textBlock.style.display = isValid ? 'none' : 'block';
+    
+    console.log('[LinkChecker] formBlock.display:', formBlock.style.display);
+    if (textBlock) console.log('[LinkChecker] textBlock.display:', textBlock.style.display);
   }
   
   if (document.readyState === 'loading') {
