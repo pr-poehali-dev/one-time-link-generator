@@ -74,12 +74,9 @@ const Index = () => {
   };
 
   const generateScript = (template: Template) => {
-    const { apiKey, spreadsheetId, sheetName } = googleSettings;
     return `<script>
 (function() {
-  const API_KEY = '${apiKey}';
-  const SPREADSHEET_ID = '${spreadsheetId}';
-  const SHEET_NAME = '${sheetName}';
+  const CHECK_API = 'https://functions.poehali.dev/70f8b3fa-befa-45a8-9936-79a9bd1c72a6';
   
   function getTokenFromUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -87,22 +84,13 @@ const Index = () => {
   }
   
   async function checkTokenInSheet(token) {
-    const url = \`https://sheets.googleapis.com/v4/spreadsheets/\${SPREADSHEET_ID}/values/\${SHEET_NAME}?key=\${API_KEY}\`;
-    
     try {
-      const response = await fetch(url);
+      const response = await fetch(\`\${CHECK_API}?token=\${encodeURIComponent(token)}\`);
       const data = await response.json();
-      
-      if (!data.values) return false;
-      
-      for (let row of data.values) {
-        if (row[0] && row[0].includes(token) && row[1] === 'new') {
-          return true;
-        }
-      }
-      return false;
+      console.log('[LinkChecker] API response:', data);
+      return data.valid === true;
     } catch (error) {
-      console.error('Ошибка проверки токена:', error);
+      console.error('[LinkChecker] Ошибка проверки токена:', error);
       return false;
     }
   }
@@ -110,19 +98,32 @@ const Index = () => {
   async function init() {
     const token = getTokenFromUrl();
     const formBlock = document.querySelector('.formreg');
+    const textBlock = document.querySelector('.textreg');
+    
+    console.log('[LinkChecker] Token:', token);
+    console.log('[LinkChecker] formBlock найден:', !!formBlock);
+    console.log('[LinkChecker] textBlock найден:', !!textBlock);
     
     if (!formBlock) {
-      console.warn('Блок .formreg не найден');
+      console.warn('[LinkChecker] Блок .formreg не найден');
       return;
     }
     
     if (!token) {
+      console.log('[LinkChecker] Нет токена - скрываем оба блока');
       formBlock.style.display = 'none';
+      if (textBlock) textBlock.style.display = 'none';
       return;
     }
     
     const isValid = await checkTokenInSheet(token);
+    console.log('[LinkChecker] Токен валиден:', isValid);
+    
     formBlock.style.display = isValid ? 'block' : 'none';
+    if (textBlock) textBlock.style.display = isValid ? 'none' : 'block';
+    
+    console.log('[LinkChecker] formBlock.display:', formBlock.style.display);
+    if (textBlock) console.log('[LinkChecker] textBlock.display:', textBlock.style.display);
   }
   
   if (document.readyState === 'loading') {
