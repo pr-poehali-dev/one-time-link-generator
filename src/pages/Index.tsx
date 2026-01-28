@@ -110,6 +110,7 @@ const Index = () => {
   async function init() {
     const token = getTokenFromUrl();
     const formBlock = document.querySelector('.formreg');
+    const textBlock = document.querySelector('.textreg');
     
     if (!formBlock) {
       console.warn('Блок .formreg не найден');
@@ -118,11 +119,13 @@ const Index = () => {
     
     if (!token) {
       formBlock.style.display = 'none';
+      if (textBlock) textBlock.style.display = 'none';
       return;
     }
     
     const isValid = await checkTokenInSheet(token);
     formBlock.style.display = isValid ? 'block' : 'none';
+    if (textBlock) textBlock.style.display = isValid ? 'none' : 'block';
   }
   
   if (document.readyState === 'loading') {
