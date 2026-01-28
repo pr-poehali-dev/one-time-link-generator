@@ -110,9 +110,9 @@ const Index = () => {
     }
     
     if (!token) {
-      console.log('[LinkChecker] Нет токена - скрываем оба блока');
+      console.log('[LinkChecker] Нет токена - показываем textreg');
       formBlock.style.display = 'none';
-      if (textBlock) textBlock.style.display = 'none';
+      if (textBlock) textBlock.style.display = 'block';
       return;
     }
     
